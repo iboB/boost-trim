@@ -2,7 +2,7 @@
 // basic_waitable_timer.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2024 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -17,6 +17,7 @@
 
 #include <boost/asio/detail/config.hpp>
 #include <cstddef>
+#include <utility>
 #include <boost/asio/any_io_executor.hpp>
 #include <boost/asio/detail/chrono_time_traits.hpp>
 #include <boost/asio/detail/deadline_timer_service.hpp>
@@ -26,10 +27,6 @@
 #include <boost/asio/detail/throw_error.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/asio/wait_traits.hpp>
-
-#if defined(BOOST_ASIO_HAS_MOVE)
-# include <utility>
-#endif // defined(BOOST_ASIO_HAS_MOVE)
 
 #include <boost/asio/detail/push_options.hpp>
 
@@ -142,6 +139,9 @@ class basic_waitable_timer;
 template <typename Clock, typename WaitTraits, typename Executor>
 class basic_waitable_timer
 {
+private:
+  class initiate_async_wait;
+
 public:
   /// The type of the executor associated with the object.
   typedef Executor executor_type;
@@ -192,9 +192,9 @@ public:
    */
   template <typename ExecutionContext>
   explicit basic_waitable_timer(ExecutionContext& context,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0)
+      > = 0)
     : impl_(0, 0, context)
   {
   }
@@ -231,9 +231,9 @@ public:
   template <typename ExecutionContext>
   explicit basic_waitable_timer(ExecutionContext& context,
       const time_point& expiry_time,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0)
+      > = 0)
     : impl_(0, 0, context)
   {
     boost::system::error_code ec;
@@ -274,9 +274,9 @@ public:
   template <typename ExecutionContext>
   explicit basic_waitable_timer(ExecutionContext& context,
       const duration& expiry_time,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0)
+      > = 0)
     : impl_(0, 0, context)
   {
     boost::system::error_code ec;
@@ -285,7 +285,6 @@ public:
     boost::asio::detail::throw_error(ec, "expires_after");
   }
 
-#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
   /// Move-construct a basic_waitable_timer from another.
   /**
    * This constructor moves a timer from one object to another.
@@ -338,9 +337,9 @@ public:
   template <typename Executor1>
   basic_waitable_timer(
       basic_waitable_timer<Clock, WaitTraits, Executor1>&& other,
-      typename constraint<
-          is_convertible<Executor1, Executor>::value
-      >::type = 0)
+      constraint_t<
+        is_convertible<Executor1, Executor>::value
+      > = 0)
     : impl_(std::move(other.impl_))
   {
   }
@@ -358,16 +357,15 @@ public:
    * constructor.
    */
   template <typename Executor1>
-  typename constraint<
+  constraint_t<
     is_convertible<Executor1, Executor>::value,
     basic_waitable_timer&
-  >::type operator=(basic_waitable_timer<Clock, WaitTraits, Executor1>&& other)
+  > operator=(basic_waitable_timer<Clock, WaitTraits, Executor1>&& other)
   {
     basic_waitable_timer tmp(std::move(other));
     impl_ = std::move(tmp.impl_);
     return *this;
   }
-#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
 
   /// Destroys the timer.
   /**
@@ -379,7 +377,7 @@ public:
   }
 
   /// Get the executor associated with the object.
-  executor_type get_executor() BOOST_ASIO_NOEXCEPT
+  const executor_type& get_executor() noexcept
   {
     return impl_.get_executor();
   }
@@ -766,12 +764,12 @@ public:
    */
   template <
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
-        WaitToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(WaitToken,
-      void (boost::system::error_code))
-  async_wait(
-      BOOST_ASIO_MOVE_ARG(WaitToken) token
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        WaitToken = default_completion_token_t<executor_type>>
+  auto async_wait(
+      WaitToken&& token = default_completion_token_t<executor_type>())
+    -> decltype(
+      async_initiate<WaitToken, void (boost::system::error_code)>(
+        declval<initiate_async_wait>(), token))
   {
     return async_initiate<WaitToken, void (boost::system::error_code)>(
         initiate_async_wait(this), token);
@@ -779,9 +777,8 @@ public:
 
 private:
   // Disallow copying and assignment.
-  basic_waitable_timer(const basic_waitable_timer&) BOOST_ASIO_DELETED;
-  basic_waitable_timer& operator=(
-      const basic_waitable_timer&) BOOST_ASIO_DELETED;
+  basic_waitable_timer(const basic_waitable_timer&) = delete;
+  basic_waitable_timer& operator=(const basic_waitable_timer&) = delete;
 
   class initiate_async_wait
   {
@@ -793,13 +790,13 @@ private:
     {
     }
 
-    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+    const executor_type& get_executor() const noexcept
     {
       return self_->get_executor();
     }
 
     template <typename WaitHandler>
-    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+    void operator()(WaitHandler&& handler) const
     {
       // If you get an error on the following line it means that your handler
       // does not meet the documented type requirements for a WaitHandler.
@@ -817,7 +814,7 @@ private:
 
   detail::io_object_impl<
     detail::deadline_timer_service<
-      detail::chrono_time_traits<Clock, WaitTraits> >,
+      detail::chrono_time_traits<Clock, WaitTraits>>,
     executor_type > impl_;
 };
 

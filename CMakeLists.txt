@@ -13,4 +13,8 @@ message(STATUS "Boost-trim found: ${BOOST_VERSION} ${BOOST_SOURCE}")
 
 add_library(Boost::boost INTERFACE IMPORTED GLOBAL)
 target_include_directories(Boost::boost SYSTEM INTERFACE ${BOOST_SOURCE})
-target_compile_definitions(Boost::boost INTERFACE BOOST_ALL_NO_LIB=1)
+target_compile_definitions(Boost::boost INTERFACE
+    BOOST_ALL_NO_LIB=1
+    BOOST_ASIO_DISABLE_BOOST_CONTEXT_FIBER=1
+    BOOST_ASIO_DISABLE_BOOST_COROUTINE=1
+)

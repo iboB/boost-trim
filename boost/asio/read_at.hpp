@@ -2,7 +2,7 @@
 // read_at.hpp
 // ~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2024 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,6 +18,7 @@
 #include <boost/asio/detail/config.hpp>
 #include <cstddef>
 #include <boost/asio/async_result.hpp>
+#include <boost/asio/completion_condition.hpp>
 #include <boost/asio/detail/cstdint.hpp>
 #include <boost/asio/error.hpp>
 
@@ -29,6 +30,14 @@
 
 namespace boost {
 namespace asio {
+namespace detail {
+
+template <typename> class initiate_async_read_at;
+#if !defined(BOOST_ASIO_NO_IOSTREAM)
+template <typename> class initiate_async_read_at_streambuf;
+#endif // !defined(BOOST_ASIO_NO_IOSTREAM)
+
+} // namespace detail
 
 /**
  * @defgroup read_at boost::asio::read_at
@@ -478,16 +487,17 @@ std::size_t read_at(SyncRandomAccessReadDevice& d,
  */
 template <typename AsyncRandomAccessReadDevice, typename MutableBufferSequence,
     BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-      std::size_t)) ReadToken
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
-          typename AsyncRandomAccessReadDevice::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-    void (boost::system::error_code, std::size_t))
-async_read_at(AsyncRandomAccessReadDevice& d, uint64_t offset,
-    const MutableBufferSequence& buffers,
-    BOOST_ASIO_MOVE_ARG(ReadToken) token
-      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
-        typename AsyncRandomAccessReadDevice::executor_type));
+      std::size_t)) ReadToken = default_completion_token_t<
+        typename AsyncRandomAccessReadDevice::executor_type>>
+auto async_read_at(AsyncRandomAccessReadDevice& d,
+    uint64_t offset, const MutableBufferSequence& buffers,
+    ReadToken&& token = default_completion_token_t<
+      typename AsyncRandomAccessReadDevice::executor_type>())
+  -> decltype(
+    async_initiate<ReadToken,
+      void (boost::system::error_code, std::size_t)>(
+        declval<detail::initiate_async_read_at<AsyncRandomAccessReadDevice>>(),
+        token, offset, buffers, transfer_all()));
 
 /// Start an asynchronous operation to read a certain amount of data at the
 /// specified offset.
@@ -574,17 +584,19 @@ async_read_at(AsyncRandomAccessReadDevice& d, uint64_t offset,
 template <typename AsyncRandomAccessReadDevice,
     typename MutableBufferSequence, typename CompletionCondition,
     BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-      std::size_t)) ReadToken
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
-          typename AsyncRandomAccessReadDevice::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-    void (boost::system::error_code, std::size_t))
-async_read_at(AsyncRandomAccessReadDevice& d,
+      std::size_t)) ReadToken = default_completion_token_t<
+        typename AsyncRandomAccessReadDevice::executor_type>>
+auto async_read_at(AsyncRandomAccessReadDevice& d,
     uint64_t offset, const MutableBufferSequence& buffers,
     CompletionCondition completion_condition,
-    BOOST_ASIO_MOVE_ARG(ReadToken) token
-      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
-        typename AsyncRandomAccessReadDevice::executor_type));
+    ReadToken&& token = default_completion_token_t<
+      typename AsyncRandomAccessReadDevice::executor_type>())
+  -> decltype(
+    async_initiate<ReadToken,
+      void (boost::system::error_code, std::size_t)>(
+        declval<detail::initiate_async_read_at<AsyncRandomAccessReadDevice>>(),
+        token, offset, buffers,
+        static_cast<CompletionCondition&&>(completion_condition)));
 
 #if !defined(BOOST_ASIO_NO_EXTENSIONS)
 #if !defined(BOOST_ASIO_NO_IOSTREAM)
@@ -653,16 +665,18 @@ async_read_at(AsyncRandomAccessReadDevice& d,
  */
 template <typename AsyncRandomAccessReadDevice, typename Allocator,
     BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-      std::size_t)) ReadToken
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
-          typename AsyncRandomAccessReadDevice::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-    void (boost::system::error_code, std::size_t))
-async_read_at(AsyncRandomAccessReadDevice& d,
+      std::size_t)) ReadToken = default_completion_token_t<
+        typename AsyncRandomAccessReadDevice::executor_type>>
+auto async_read_at(AsyncRandomAccessReadDevice& d,
     uint64_t offset, basic_streambuf<Allocator>& b,
-    BOOST_ASIO_MOVE_ARG(ReadToken) token
-      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
-        typename AsyncRandomAccessReadDevice::executor_type));
+    ReadToken&& token = default_completion_token_t<
+      typename AsyncRandomAccessReadDevice::executor_type>())
+  -> decltype(
+    async_initiate<ReadToken,
+      void (boost::system::error_code, std::size_t)>(
+        declval<detail::initiate_async_read_at_streambuf<
+          AsyncRandomAccessReadDevice>>(),
+        token, offset, &b, transfer_all()));
 
 /// Start an asynchronous operation to read a certain amount of data at the
 /// specified offset.
@@ -737,17 +751,19 @@ async_read_at(AsyncRandomAccessReadDevice& d,
 template <typename AsyncRandomAccessReadDevice,
     typename Allocator, typename CompletionCondition,
     BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-      std::size_t)) ReadToken
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
-          typename AsyncRandomAccessReadDevice::executor_type)>
-BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-    void (boost::system::error_code, std::size_t))
-async_read_at(AsyncRandomAccessReadDevice& d,
-    uint64_t offset, basic_streambuf<Allocator>& b,
-    CompletionCondition completion_condition,
-    BOOST_ASIO_MOVE_ARG(ReadToken) token
-      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
-        typename AsyncRandomAccessReadDevice::executor_type));
+      std::size_t)) ReadToken = default_completion_token_t<
+        typename AsyncRandomAccessReadDevice::executor_type>>
+auto async_read_at(AsyncRandomAccessReadDevice& d, uint64_t offset,
+    basic_streambuf<Allocator>& b, CompletionCondition completion_condition,
+    ReadToken&& token = default_completion_token_t<
+      typename AsyncRandomAccessReadDevice::executor_type>())
+  -> decltype(
+    async_initiate<ReadToken,
+      void (boost::system::error_code, std::size_t)>(
+        declval<detail::initiate_async_read_at_streambuf<
+          AsyncRandomAccessReadDevice>>(),
+        token, offset, &b,
+        static_cast<CompletionCondition&&>(completion_condition)));
 
 #endif // !defined(BOOST_ASIO_NO_IOSTREAM)
 #endif // !defined(BOOST_ASIO_NO_EXTENSIONS)

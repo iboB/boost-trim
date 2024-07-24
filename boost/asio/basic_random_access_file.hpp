@@ -2,7 +2,7 @@
 // basic_random_access_file.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2024 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -61,6 +61,10 @@ template <typename Executor>
 class basic_random_access_file
   : public basic_file<Executor>
 {
+private:
+  class initiate_async_write_some_at;
+  class initiate_async_read_some_at;
+
 public:
   /// The type of the executor associated with the object.
   typedef Executor executor_type;
@@ -104,10 +108,10 @@ public:
    */
   template <typename ExecutionContext>
   explicit basic_random_access_file(ExecutionContext& context,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_file<Executor>(context)
   {
   }
@@ -150,10 +154,10 @@ public:
   template <typename ExecutionContext>
   basic_random_access_file(ExecutionContext& context,
       const char* path, file_base::flags open_flags,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_file<Executor>(context, path, open_flags)
   {
   }
@@ -196,10 +200,10 @@ public:
   template <typename ExecutionContext>
   basic_random_access_file(ExecutionContext& context,
       const std::string& path, file_base::flags open_flags,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_file<Executor>(context, path, open_flags)
   {
   }
@@ -238,15 +242,14 @@ public:
   template <typename ExecutionContext>
   basic_random_access_file(ExecutionContext& context,
       const native_handle_type& native_file,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_file<Executor>(context, native_file)
   {
   }
 
-#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
   /// Move-construct a basic_random_access_file from another.
   /**
    * This constructor moves a random-access file from one object to another.
@@ -258,7 +261,7 @@ public:
    * constructed using the @c basic_random_access_file(const executor_type&)
    * constructor.
    */
-  basic_random_access_file(basic_random_access_file&& other) BOOST_ASIO_NOEXCEPT
+  basic_random_access_file(basic_random_access_file&& other) noexcept
     : basic_file<Executor>(std::move(other))
   {
   }
@@ -295,10 +298,10 @@ public:
    */
   template <typename Executor1>
   basic_random_access_file(basic_random_access_file<Executor1>&& other,
-      typename constraint<
+      constraint_t<
         is_convertible<Executor1, Executor>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_file<Executor>(std::move(other))
   {
   }
@@ -317,15 +320,14 @@ public:
    * constructor.
    */
   template <typename Executor1>
-  typename constraint<
+  constraint_t<
     is_convertible<Executor1, Executor>::value,
     basic_random_access_file&
-  >::type operator=(basic_random_access_file<Executor1>&& other)
+  > operator=(basic_random_access_file<Executor1>&& other)
   {
     basic_file<Executor>::operator=(std::move(other));
     return *this;
   }
-#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
 
   /// Destroys the file.
   /**
@@ -456,14 +458,13 @@ public:
    */
   template <typename ConstBufferSequence,
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-        std::size_t)) WriteToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(WriteToken,
-      void (boost::system::error_code, std::size_t))
-  async_write_some_at(uint64_t offset,
-      const ConstBufferSequence& buffers,
-      BOOST_ASIO_MOVE_ARG(WriteToken) token
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        std::size_t)) WriteToken = default_completion_token_t<executor_type>>
+  auto async_write_some_at(uint64_t offset, const ConstBufferSequence& buffers,
+      WriteToken&& token = default_completion_token_t<executor_type>())
+    -> decltype(
+      async_initiate<WriteToken,
+        void (boost::system::error_code, std::size_t)>(
+          declval<initiate_async_write_some_at>(), token, offset, buffers))
   {
     return async_initiate<WriteToken,
       void (boost::system::error_code, std::size_t)>(
@@ -593,14 +594,13 @@ public:
    */
   template <typename MutableBufferSequence,
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-        std::size_t)) ReadToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-      void (boost::system::error_code, std::size_t))
-  async_read_some_at(uint64_t offset,
-      const MutableBufferSequence& buffers,
-      BOOST_ASIO_MOVE_ARG(ReadToken) token
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        std::size_t)) ReadToken = default_completion_token_t<executor_type>>
+  auto async_read_some_at(uint64_t offset, const MutableBufferSequence& buffers,
+      ReadToken&& token = default_completion_token_t<executor_type>())
+    -> decltype(
+      async_initiate<ReadToken,
+        void (boost::system::error_code, std::size_t)>(
+          declval<initiate_async_read_some_at>(), token, offset, buffers))
   {
     return async_initiate<ReadToken,
       void (boost::system::error_code, std::size_t)>(
@@ -609,9 +609,9 @@ public:
 
 private:
   // Disallow copying and assignment.
-  basic_random_access_file(const basic_random_access_file&) BOOST_ASIO_DELETED;
+  basic_random_access_file(const basic_random_access_file&) = delete;
   basic_random_access_file& operator=(
-      const basic_random_access_file&) BOOST_ASIO_DELETED;
+      const basic_random_access_file&) = delete;
 
   class initiate_async_write_some_at
   {
@@ -623,13 +623,13 @@ private:
     {
     }
 
-    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+    const executor_type& get_executor() const noexcept
     {
       return self_->get_executor();
     }
 
     template <typename WriteHandler, typename ConstBufferSequence>
-    void operator()(BOOST_ASIO_MOVE_ARG(WriteHandler) handler,
+    void operator()(WriteHandler&& handler,
         uint64_t offset, const ConstBufferSequence& buffers) const
     {
       // If you get an error on the following line it means that your handler
@@ -656,13 +656,13 @@ private:
     {
     }
 
-    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+    const executor_type& get_executor() const noexcept
     {
       return self_->get_executor();
     }
 
     template <typename ReadHandler, typename MutableBufferSequence>
-    void operator()(BOOST_ASIO_MOVE_ARG(ReadHandler) handler,
+    void operator()(ReadHandler&& handler,
         uint64_t offset, const MutableBufferSequence& buffers) const
     {
       // If you get an error on the following line it means that your handler

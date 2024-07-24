@@ -2,7 +2,7 @@
 // posix/basic_stream_descriptor.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2024 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -49,6 +49,10 @@ template <typename Executor = any_io_executor>
 class basic_stream_descriptor
   : public basic_descriptor<Executor>
 {
+private:
+  class initiate_async_write_some;
+  class initiate_async_read_some;
+
 public:
   /// The type of the executor associated with the object.
   typedef Executor executor_type;
@@ -92,10 +96,10 @@ public:
    */
   template <typename ExecutionContext>
   explicit basic_stream_descriptor(ExecutionContext& context,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value,
         defaulted_constraint
-      >::type = defaulted_constraint())
+      > = defaulted_constraint())
     : basic_descriptor<Executor>(context)
   {
   }
@@ -135,14 +139,13 @@ public:
   template <typename ExecutionContext>
   basic_stream_descriptor(ExecutionContext& context,
       const native_handle_type& native_descriptor,
-      typename constraint<
+      constraint_t<
         is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0)
+      > = 0)
     : basic_descriptor<Executor>(context, native_descriptor)
   {
   }
 
-#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
   /// Move-construct a stream descriptor from another.
   /**
    * This constructor moves a stream descriptor from one object to another.
@@ -154,7 +157,7 @@ public:
    * constructed using the @c basic_stream_descriptor(const executor_type&)
    * constructor.
    */
-  basic_stream_descriptor(basic_stream_descriptor&& other) BOOST_ASIO_NOEXCEPT
+  basic_stream_descriptor(basic_stream_descriptor&& other) noexcept
     : basic_descriptor<Executor>(std::move(other))
   {
   }
@@ -176,7 +179,50 @@ public:
     basic_descriptor<Executor>::operator=(std::move(other));
     return *this;
   }
-#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+
+  /// Move-construct a basic_stream_descriptor from a descriptor of another
+  /// executor type.
+  /**
+   * This constructor moves a descriptor from one object to another.
+   *
+   * @param other The other basic_stream_descriptor object from which the move
+   * will occur.
+   *
+   * @note Following the move, the moved-from object is in the same state as if
+   * constructed using the @c basic_stream_descriptor(const executor_type&)
+   * constructor.
+   */
+  template <typename Executor1>
+  basic_stream_descriptor(basic_stream_descriptor<Executor1>&& other,
+      constraint_t<
+        is_convertible<Executor1, Executor>::value,
+        defaulted_constraint
+      > = defaulted_constraint())
+    : basic_descriptor<Executor>(std::move(other))
+  {
+  }
+
+  /// Move-assign a basic_stream_descriptor from a descriptor of another
+  /// executor type.
+  /**
+   * This assignment operator moves a descriptor from one object to another.
+   *
+   * @param other The other basic_stream_descriptor object from which the move
+   * will occur.
+   *
+   * @note Following the move, the moved-from object is in the same state as if
+   * constructed using the @c basic_stream_descriptor(const executor_type&)
+   * constructor.
+   */
+  template <typename Executor1>
+  constraint_t<
+    is_convertible<Executor1, Executor>::value,
+    basic_stream_descriptor&
+  > operator=(basic_stream_descriptor<Executor1> && other)
+  {
+    basic_descriptor<Executor>::operator=(std::move(other));
+    return *this;
+  }
 
   /// Write some data to the descriptor.
   /**
@@ -292,13 +338,13 @@ public:
    */
   template <typename ConstBufferSequence,
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-        std::size_t)) WriteToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(WriteToken,
-      void (boost::system::error_code, std::size_t))
-  async_write_some(const ConstBufferSequence& buffers,
-      BOOST_ASIO_MOVE_ARG(WriteToken) token
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        std::size_t)) WriteToken = default_completion_token_t<executor_type>>
+  auto async_write_some(const ConstBufferSequence& buffers,
+      WriteToken&& token = default_completion_token_t<executor_type>())
+    -> decltype(
+      async_initiate<WriteToken,
+        void (boost::system::error_code, std::size_t)>(
+          initiate_async_write_some(this), token, buffers))
   {
     return async_initiate<WriteToken,
       void (boost::system::error_code, std::size_t)>(
@@ -422,13 +468,13 @@ public:
    */
   template <typename MutableBufferSequence,
       BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
-        std::size_t)) ReadToken
-          BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadToken,
-      void (boost::system::error_code, std::size_t))
-  async_read_some(const MutableBufferSequence& buffers,
-      BOOST_ASIO_MOVE_ARG(ReadToken) token
-        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        std::size_t)) ReadToken = default_completion_token_t<executor_type>>
+  auto async_read_some(const MutableBufferSequence& buffers,
+      ReadToken&& token = default_completion_token_t<executor_type>())
+    -> decltype(
+      async_initiate<ReadToken,
+        void (boost::system::error_code, std::size_t)>(
+          declval<initiate_async_read_some>(), token, buffers))
   {
     return async_initiate<ReadToken,
       void (boost::system::error_code, std::size_t)>(
@@ -446,13 +492,13 @@ private:
     {
     }
 
-    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+    const executor_type& get_executor() const noexcept
     {
       return self_->get_executor();
     }
 
     template <typename WriteHandler, typename ConstBufferSequence>
-    void operator()(BOOST_ASIO_MOVE_ARG(WriteHandler) handler,
+    void operator()(WriteHandler&& handler,
         const ConstBufferSequence& buffers) const
     {
       // If you get an error on the following line it means that your handler
@@ -479,13 +525,13 @@ private:
     {
     }
 
-    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+    const executor_type& get_executor() const noexcept
     {
       return self_->get_executor();
     }
 
     template <typename ReadHandler, typename MutableBufferSequence>
-    void operator()(BOOST_ASIO_MOVE_ARG(ReadHandler) handler,
+    void operator()(ReadHandler&& handler,
         const MutableBufferSequence& buffers) const
     {
       // If you get an error on the following line it means that your handler
